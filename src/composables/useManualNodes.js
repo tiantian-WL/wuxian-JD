@@ -12,7 +12,7 @@ export function useManualNodes(initialNodesRef, markDirty) {
 
   // 国家/地区代码到旗帜和中文名称的映射
   const countryCodeMap = {
-    'hk': ['🇭🇰', '香港'],
+    'hk': ['🇭🇰', '香港', 'HK'],
     'tw': ['🇹🇼', '台湾', '臺灣'],
     'sg': ['🇸🇬', '新加坡', '狮城'],
     'jp': ['🇯🇵', '日本'],
@@ -81,29 +81,37 @@ export function useManualNodes(initialNodesRef, markDirty) {
     if (!searchTerm.value) {
       return manualNodes.value;
     }
-    const lowerCaseSearch = searchTerm.value.toLowerCase();
+    const searchQuery = searchTerm.value.toLowerCase().trim();
     
-    // 获取可能的替代搜索词
-    const alternativeTerms = countryCodeMap[lowerCaseSearch] || [];
-    
-    return manualNodes.value.filter(node => {
-      const nodeNameLower = node.name ? node.name.toLowerCase() : '';
+    const filtered = manualNodes.value.filter(node => {
+      if (!node.name) return false;
       
-      // 检查节点名称是否包含原始搜索词
-      if (nodeNameLower.includes(lowerCaseSearch)) {
+      const nodeName = node.name.toLowerCase();
+      
+      // 直接搜索匹配
+      if (nodeName.includes(searchQuery)) {
         return true;
       }
       
+      // 获取可能的替代搜索词（国家代码映射）
+      const alternativeTerms = countryCodeMap[searchQuery] || [];
+      
       // 检查节点名称是否包含任何替代词
       for (const altTerm of alternativeTerms) {
-        if (nodeNameLower.includes(altTerm.toLowerCase())) {
+        if (nodeName.includes(altTerm.toLowerCase())) {
           return true;
         }
       }
       
       return false;
     });
+    
+    return filtered;
   });
+  
+  // 保持原始节点数据不变，用于显示总数等
+  const originalManualNodes = computed(() => manualNodes.value);
+  
   const manualNodesTotalPages = computed(() => Math.ceil(filteredManualNodes.value.length / manualNodesPerPage));
 
   // [修改] 分页使用过滤后的节点
@@ -231,9 +239,12 @@ export function useManualNodes(initialNodesRef, markDirty) {
     markDirty();
   }
 
-    // [新增] 监听搜索词变化，重置分页
-  watch(searchTerm, () => {
-    manualNodesCurrentPage.value = 1;
+  // [新增] 监听搜索词变化，重置分页
+  watch(searchTerm, (newValue, oldValue) => {
+    // 只在搜索词实际改变时重置分页
+    if (newValue !== oldValue) {
+      manualNodesCurrentPage.value = 1;
+    }
   });
 
   watch(initialNodesRef, (newInitialNodes) => {
@@ -241,10 +252,10 @@ export function useManualNodes(initialNodesRef, markDirty) {
   }, { immediate: true, deep: true });
 
   return {
-    manualNodes,
+    manualNodes: originalManualNodes, // 返回原始数据，不经过搜索过滤
     manualNodesCurrentPage,
     manualNodesTotalPages,
-    paginatedManualNodes,
+    paginatedManualNodes, // 这个已经经过搜索过滤和分页
     enabledManualNodesCount: computed(() => enabledManualNodes.value.length),
     searchTerm, // [新增] 导出搜索词
     changeManualNodesPage,
