@@ -1,18 +1,27 @@
 <script setup>
-import { onMounted } from 'vue';
+import { defineAsyncComponent, onMounted } from 'vue';
 import { useThemeStore } from './stores/theme';
 import { useSessionStore } from './stores/session';
 import { useToastStore } from './stores/toast';
 import { storeToRefs } from 'pinia';
 
-import Dashboard from './components/Dashboard.vue';
-import DashboardSkeleton from './components/DashboardSkeleton.vue';
-import Login from './components/Login.vue';
-import Header from './components/Header.vue';
-import Toast from './components/Toast.vue';
-import Footer from './components/Footer.vue';
-import PWAUpdatePrompt from './components/PWAUpdatePrompt.vue';
-import PWADevTools from './components/PWADevTools.vue';
+// 懒加载大型组件以提升性能
+const DashboardSkeleton = defineAsyncComponent(() => import('./components/layout/DashboardSkeleton.vue'));
+const Dashboard = defineAsyncComponent({
+  loader: () => import('./components/features/Dashboard/Dashboard.vue'),
+  loadingComponent: DashboardSkeleton,
+  errorComponent: {
+    template: '<div class="p-4 text-red-500 text-center">Failed to load Dashboard component. Check console for details.</div>'
+  },
+  timeout: 3000
+});
+const Login = defineAsyncComponent(() => import('./components/modals/Login.vue'));
+const Header = defineAsyncComponent(() => import('./components/layout/Header.vue'));
+const Toast = defineAsyncComponent(() => import('./components/ui/Toast.vue'));
+const Footer = defineAsyncComponent(() => import('./components/layout/Footer.vue'));
+const PWAUpdatePrompt = defineAsyncComponent(() => import('./components/features/PWAUpdatePrompt.vue'));
+const PWADevTools = defineAsyncComponent(() => import('./components/features/PWADevTools.vue'));
+const MobileBottomNav = defineAsyncComponent(() => import('./components/layout/MobileBottomNav.vue'));
 
 const themeStore = useThemeStore();
 const { theme } = storeToRefs(themeStore);
@@ -26,9 +35,17 @@ const toastStore = useToastStore();
 const { toast: toastState } = storeToRefs(toastStore);
 
 onMounted(() => {
+  // 简单的性能监控（仅在开发模式显示）
+  const loadTime = performance.now();
+  if (import.meta.env.DEV) {
+    console.log(`MiSub App loaded in ${loadTime.toFixed(2)}ms`);
+  }
+
+  // 初始化主题和会话
   initTheme();
   checkSession();
 });
+
 </script>
 
 <template>
@@ -46,8 +63,9 @@ onMounted(() => {
         'ios-content-offset': sessionState === 'loggedIn' || sessionState === 'loading'
       }"
     >
+
       <DashboardSkeleton v-if="sessionState === 'loading'" />
-      <Dashboard v-else-if="sessionState === 'loggedIn' && initialData" :data="initialData" />
+      <Dashboard v-else-if="sessionState === 'loggedIn'" :data="initialData || {}" />
       <Login v-else :login="login" />
     </main>
     
@@ -59,6 +77,11 @@ onMounted(() => {
 </template>
 
 <style>
+:root {
+  --header-height: 80px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
 :root.dark {
   color-scheme: dark;
 }
@@ -70,19 +93,21 @@ onMounted(() => {
 @supports (-webkit-touch-callout: none) {
   .ios-content-offset {
     /* 为iOS状态栏和Header高度预留空间，防止内容穿透 */
-    padding-top: calc(env(safe-area-inset-top, 0px) + 80px);
+    padding-top: calc(var(--safe-top) + var(--header-height));
     margin-top: 0;
   }
   
   /* 确保整个应用区域正确适配 */
   body {
-    padding-top: env(safe-area-inset-top, 0px);
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
   }
   
   /* 全局iOS适配 */
   html, body {
     overflow-x: hidden;
     position: relative;
+    height: 100%;
   }
   
   /* 确保内容区域不会穿透 */
